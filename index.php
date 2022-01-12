@@ -1,18 +1,27 @@
 <?php
 /*
- *   Copyright (c) 2021.
- *   Coded by Moritz David
+ *  Copyright (c) 2022.
+ *  Coded by Moritz David
  *
- *  ----------------------------
- *   LF07 REST-API Version 1.0
- *  ----------------------------
+ * ----------------------------
+ *  Raspberry Pi Temperature Project
+ *       REST-API Version 1.1
+ * ----------------------------
  *
- *   GET and POST data via URL-Parameter
- *   return file format is JSON
- *   Bsp. POST: http://www.example.com/index.php?temp=22.1&room=3.11
- *   Bsp. GET:  http://www.example.com/index.php?id=12
+ *  Handles GET and POST-Requests and reads data via URL-Parameter
+ *  Returns the result in JSON
+ *  Bsp. POST-Request: http://www.example.com/index.php?temp=22.1&room=3.11
+ *  Bsp. GET-Request:  http://www.example.com/index.php?id=12
+ *
+ *  Available URL-Parameter:
+ *  id, temp, room, timestamp, totalentrycount
+ *
+ *  Necessary URL-Parameter for POST requests:
+ *  temp, room
+ *
  */
 
+// Please check if this filepath is correct
 $path = $_SERVER['DOCUMENT_ROOT'];
 $path .= "/dbConfig.php";
 require_once($path);
@@ -23,46 +32,62 @@ const DB_ATTRIBUTE_ROOM = "raum";
 const DB_ATTRIBUTE_TIMESTAMP = "measuredAt";
 
 const URL_PARAM_ID = "id";
-const URL_PARAM_ROOM = "room";
 const URL_PARAM_TEMP = "temp";
+const URL_PARAM_ROOM = "room";
 const URL_PARAM_TIMESTAMP = "timestamp";
+const URL_PARAM_TOTAL_ENTRY_COUNT = "totalentrycount";
 
 $returnValue = "";
 
-// Create database connection
-$mysqli = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-if ($mysqli->connect_error) {
-    http_response_code(500);
-    die("Database error. Connection failed: " . $mysqli->connect_error);
-} else {
+try {
+    // Create database connection
+    $databaseConnection = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
+    $databaseConnection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $databaseConnection->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($_GET) && isset($_GET[URL_PARAM_TEMP]) && isset($_GET[URL_PARAM_ROOM])) {
-            insertIntoDB($mysqli, $_GET[URL_PARAM_TEMP], $_GET[URL_PARAM_ROOM]);
-            $returnValue = "Created a new entry in the Database: temp=" . trim($_GET[URL_PARAM_TEMP]) . " & room=" . trim($_GET[URL_PARAM_ROOM]);
+            if (insertIntoDB($databaseConnection, $_GET[URL_PARAM_TEMP], $_GET[URL_PARAM_ROOM])) {
+                $returnValue = "Successfully created a new entry in the Database.";
+            } else {
+                http_response_code(400);
+                die("Error, creating new entry failed.");
+            }
         } else {
-            // error no data send
             http_response_code(400);
-            die ("Error, no data send");
+            die ("Error, no data provided");
         }
     } else if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         // When url parameter is set, return specific dataset
         if (isset($_GET[URL_PARAM_ID])) {
-            $returnValue = selectWhereEquals($mysqli, DB_ATTRIBUTE_ID, $_GET[URL_PARAM_ID]);
-        } else if (isset($_GET[URL_PARAM_ROOM])) {
-            $returnValue = selectWhereEquals($mysqli, DB_ATTRIBUTE_ROOM, $_GET[URL_PARAM_ROOM]);
+            $returnValue = selectWhereEquals($databaseConnection, DB_ATTRIBUTE_ID, utf8_encode($_GET[URL_PARAM_ID]));
         } else if (isset($_GET[URL_PARAM_TEMP])) {
-            $returnValue = selectWhereEquals($mysqli, DB_ATTRIBUTE_TEMP, $_GET[URL_PARAM_TEMP]);
-        } else {
+            $returnValue = selectWhereEquals($databaseConnection, DB_ATTRIBUTE_TEMP, utf8_encode($_GET[URL_PARAM_TEMP]));
+        } else if (isset($_GET[URL_PARAM_ROOM])) {
+            $returnValue = selectWhereEquals($databaseConnection, DB_ATTRIBUTE_ROOM, utf8_encode($_GET[URL_PARAM_ROOM]));
+        } else if (isset($_GET[URL_PARAM_TOTAL_ENTRY_COUNT])) {
+            if (utf8_encode($_GET[URL_PARAM_TOTAL_ENTRY_COUNT]) == "true") {
+                $returnValue = getTotalEntryCount($databaseConnection);
+            }
+        } else if (sizeof($_GET) == 0) {
             // When no GET PARAM set, return whole database
-            $returnValue = selectAll($mysqli);
+            $returnValue = selectAll($databaseConnection);
         }
     } else {
         http_response_code(400);
         die ("Error, wrong request type.");
     }
+} catch (PDOException $e) {
+    http_response_code(500);
+    die("Database error: " . $e);
 }
-$mysqli->close();
-echo $returnValue;
+
+if (!empty($returnValue)) {
+    echo $returnValue;
+} else {
+    http_response_code(500);
+}
+$databaseConnection = null;
 
 
 function temperatureMeasurementObject($id, $temperature, $room, $timestamp)
@@ -75,47 +100,64 @@ function temperatureMeasurementObject($id, $temperature, $room, $timestamp)
     );
 }
 
-function getJsonObjectArrayFromDatabaseResult($result)
-{
-    $list = array();
-    while ($row = $result->fetch_assoc()) {
-        $id = $row[DB_ATTRIBUTE_ID];
-        $temperature = $row[DB_ATTRIBUTE_TEMP];
-        $room = $row[DB_ATTRIBUTE_ROOM];
-        $timestamp = $row[DB_ATTRIBUTE_TIMESTAMP];
-
-        $list[] = temperatureMeasurementObject($id, $temperature, $room, $timestamp);
-    }
-    // Convert to json array
-    return json_encode($list);
-}
-
 function insertIntoDB($databaseConnection, $temperature, $room)
 {
-    $sql = 'INSERT INTO ' . DB_TABLE . ' (' . DB_ATTRIBUTE_TEMP . ', ' . DB_ATTRIBUTE_ROOM . ') VALUES (?, ?)';
-
-    /* Prepared statement */
-    if (!($stmt = $databaseConnection->prepare($sql)) || !$stmt->bind_param("ds", trim($temperature), trim($room)) || !$stmt->execute()) {
-        http_response_code(400);
-        die("Es ist ein Fehler aufgetreten");
+    if (!empty($temperature) && !empty($room)) {
+        $sqlQuery = "INSERT INTO " . DB_TABLE . " (" . DB_ATTRIBUTE_TEMP . ", " . DB_ATTRIBUTE_ROOM . ") VALUES (?, ?)";
+        $stmt = $databaseConnection->prepare($sqlQuery);
+        return $stmt->execute(array(utf8_encode($temperature), utf8_encode($room)));
+    } else {
+        return false;
     }
 }
 
 function selectWhereEquals($databaseConnection, $dbAttribute, $searchValue)
 {
-    $sql = 'SELECT * FROM ' . DB_TABLE . ' WHERE ' . $dbAttribute . ' = ? ORDER BY ' . DB_ATTRIBUTE_ID;
-
-    /* Prepared statement */
-    if (!($stmt = $databaseConnection->prepare($sql)) || !$stmt->bind_param("s", trim($searchValue)) || !$stmt->execute()) {
-        http_response_code(400);
-        die("Es ist ein Fehler aufgetreten");
+    if (!empty($searchValue)) {
+        $sqlQuery = "SELECT * FROM " . DB_TABLE . " WHERE " . $dbAttribute . " = ? ORDER BY " . DB_ATTRIBUTE_ID;
+        $stmt = $databaseConnection->prepare($sqlQuery);
+        $stmt->execute(array($searchValue));
+        return getJsonObjectArrayFromDatabaseConnection($stmt);
+    } else {
+        return null;
     }
-
-    return getJsonObjectArrayFromDatabaseResult($stmt->get_result());
 }
 
 function selectAll($databaseConnection)
 {
-    $sql = 'SELECT * FROM ' . DB_TABLE . ' ORDER BY ' . DB_ATTRIBUTE_ID;
-    return getJsonObjectArrayFromDatabaseResult($databaseConnection->query($sql));
+    $sqlQuery = "SELECT * FROM " . DB_TABLE . " ORDER BY " . DB_ATTRIBUTE_ID;
+    $stmt = $databaseConnection->prepare($sqlQuery);
+    $stmt->execute();
+    return getJsonObjectArrayFromDatabaseConnection($stmt);
+}
+
+function getTotalEntryCount($databaseConnection)
+{
+    $sqlQuery = "SELECT COUNT(" . DB_ATTRIBUTE_ID . ") AS " . URL_PARAM_TOTAL_ENTRY_COUNT . " FROM " . DB_TABLE . " LIMIT 1";
+    $stmt = $databaseConnection->prepare($sqlQuery);
+    $stmt->execute();
+    $stmt->setFetchMode(PDO::FETCH_ASSOC);
+    $data = $stmt->fetch();
+    return json_encode(array(URL_PARAM_TOTAL_ENTRY_COUNT => $data[URL_PARAM_TOTAL_ENTRY_COUNT]), JSON_NUMERIC_CHECK);
+}
+
+function getJsonObjectArrayFromDatabaseConnection($stmt)
+{
+    $data = array();
+
+    // loop through the query results array
+    $stmt->setFetchMode(PDO::FETCH_ASSOC);
+    foreach ($stmt->fetchAll() as $row) {
+        $id = utf8_encode($row[DB_ATTRIBUTE_ID]);
+        $temperature = utf8_encode($row[DB_ATTRIBUTE_TEMP]);
+        $room = utf8_encode($row[DB_ATTRIBUTE_ROOM]);
+        $timestamp = utf8_encode($row[DB_ATTRIBUTE_TIMESTAMP]);
+
+        if (!empty($id) || !empty($temperature) || !empty($room) || !empty($timestamp)) {
+            $data[] = temperatureMeasurementObject($id, $temperature, $room, $timestamp);
+        }
+    }
+
+    // Convert to json array
+    return json_encode($data, JSON_NUMERIC_CHECK);
 }
