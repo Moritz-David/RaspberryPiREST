@@ -5,7 +5,7 @@
  *
  * ----------------------------
  *  Raspberry Pi Temperature Project
- *       REST-API Version 1.1
+ *       REST-API Version 1.2
  * ----------------------------
  *
  *  Handles GET and POST-Requests and reads data via URL-Parameter
@@ -102,7 +102,7 @@ function temperatureMeasurementObject($id, $temperature, $room, $timestamp)
 
 function insertIntoDB($databaseConnection, $temperature, $room)
 {
-    if (!empty($temperature) && !empty($room)) {
+    if ($temperature !== null && !empty($room)) {
         $sqlQuery = "INSERT INTO " . DB_TABLE . " (" . DB_ATTRIBUTE_TEMP . ", " . DB_ATTRIBUTE_ROOM . ") VALUES (?, ?)";
         $stmt = $databaseConnection->prepare($sqlQuery);
         return $stmt->execute(array(utf8_encode($temperature), utf8_encode($room)));
@@ -113,7 +113,7 @@ function insertIntoDB($databaseConnection, $temperature, $room)
 
 function selectWhereEquals($databaseConnection, $dbAttribute, $searchValue)
 {
-    if (!empty($searchValue)) {
+    if ($searchValue !== null) {
         $sqlQuery = "SELECT * FROM " . DB_TABLE . " WHERE " . $dbAttribute . " = ? ORDER BY " . DB_ATTRIBUTE_ID;
         $stmt = $databaseConnection->prepare($sqlQuery);
         $stmt->execute(array($searchValue));
@@ -153,7 +153,7 @@ function getJsonObjectArrayFromDatabaseConnection($stmt)
         $room = utf8_encode($row[DB_ATTRIBUTE_ROOM]);
         $timestamp = utf8_encode($row[DB_ATTRIBUTE_TIMESTAMP]);
 
-        if (!empty($id) || !empty($temperature) || !empty($room) || !empty($timestamp)) {
+        if (!empty($id) || $temperature !== null || !empty($room) || !empty($timestamp)) {
             $data[] = temperatureMeasurementObject($id, $temperature, $room, $timestamp);
         }
     }
