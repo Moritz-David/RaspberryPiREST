@@ -133,7 +133,7 @@ function selectAll($databaseConnection)
 
 function getTotalEntryCount($databaseConnection)
 {
-    $sqlQuery = "SELECT COUNT(" . DB_ATTRIBUTE_ID . ") AS " . URL_PARAM_TOTAL_ENTRY_COUNT . " FROM " . DB_TABLE . " LIMIT 1";
+    $sqlQuery = "SELECT " . DB_ATTRIBUTE_ID . " AS " . URL_PARAM_TOTAL_ENTRY_COUNT . " FROM " . DB_TABLE . " ORDER BY " . DB_ATTRIBUTE_ID . " DESC LIMIT 1";
     $stmt = $databaseConnection->prepare($sqlQuery);
     $stmt->execute();
     $stmt->setFetchMode(PDO::FETCH_ASSOC);
