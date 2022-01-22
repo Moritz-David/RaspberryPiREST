@@ -1,7 +1,6 @@
 ### User template
 # Exclude not necessary files
 .htaccess
-databaseInstallation.sql
 
 # Config files
 dbConfig.php
