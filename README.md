@@ -40,13 +40,14 @@ HTTP-GET = Daten bekommen
 - GET und POST Requests können gesendet werden.
 - Filterparameter und Datensätze werden per URL-Parameter übertragen.
 - Gibt die Daten im JSON Format zurück.
+- Das PHP-Script gibt HTTP-Status-Codes im HTTP-Header zurück
 
 ### Requests
-Bsp. POST-Request: http://localhost/index.php?temp=22.1&room=3.11
+Bsp. POST-Request: `/index.php?temp=22.1&room=3.11`
 
-Bsp. GET-Request:  http://localhost/index.php?id=12
+Bsp. GET-Request:  `/index.php?id=12`
 
-### Verfügbare URL-Parameter:
+### Verfügbare URL-Parameter zur gezielten Suche in der GET Request:
 - `id`
 - `temp`
 - `room`
