@@ -5,7 +5,7 @@
  *
  * ----------------------------
  *  Raspberry Pi Temperature Project
- *       REST-API Version 1.2
+ *       REST-API Version 1.3
  * ----------------------------
  *
  *  Handles GET and POST-Requests and reads data via URL-Parameter
