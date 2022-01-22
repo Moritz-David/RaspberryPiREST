@@ -1,5 +1,5 @@
 # RaspberryPiREST
-Skripte zum Senden und Empfangen der Daten mit dem Raspberry Pi unter [https://github.com/Dubsteet/RaspberryPiTempCom](https://github.com/Dubsteet/RaspberryPiTempComf)
+Skripte zum Senden und Empfangen der Daten mit dem Raspberry Pi unter [https://github.com/Dubsteet/RaspberryPiTempCom](https://github.com/Dubsteet/RaspberryPiTempCom)
 
 ## Topologie
 
